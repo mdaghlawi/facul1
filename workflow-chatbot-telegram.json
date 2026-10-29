@@ -1,0 +1,374 @@
+{
+  "name": "Chatbot Telegram - Temperatura (OpenWeather)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e01",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "b7c2e9a4-5d6f-4e3a-8b1c-2d3e4f5a6b70"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-0001-4a00-8000-000000000001",
+              "name": "queue",
+              "value": "={{ (() => { const t = String($json.message?.text ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s*,\\s*/g, ',').replace(/\\s+/g, ' ').replace(/^,+|,+$/g, '').trim(); return t && !t.includes(',') ? t + ',br' : t; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0001-4a00-8000-000000000002",
+              "name": "chat_id",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b2c3d4-0001-4a00-8000-000000000003",
+              "name": "texto_original",
+              "value": "={{ $json.message?.text ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e02",
+      "name": "Formatar Entrada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openweathermap.org/data/2.5/weather",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.queue }}"
+            },
+            {
+              "name": "queue",
+              "value": "={{ $json.queue }}"
+            },
+            {
+              "name": "units",
+              "value": "metric"
+            },
+            {
+              "name": "lang",
+              "value": "pt_br"
+            },
+            {
+              "name": "appid",
+              "value": "={{ $env.OPENWEATHER_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e03",
+      "name": "OpenWeather - Clima Atual",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0ffee01-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "c0ffee01-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.body?.main?.temp }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0ffee01-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body?.name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e04",
+      "name": "Resposta Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fallback deterministico: gera a mensagem final sem depender do Gemini.\nconst resp = $input.first().json;\nconst body = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;\n\nconst cidade = body.name;\nconst temperatura = Math.round(Number(body.main.temp));\nconst message = `🌤️ A temperatura em ${cidade} é de ${temperatura}°C.`;\n\nreturn [{\n  json: {\n    ok: true,\n    message,\n    cidade,\n    temperatura,\n    chat_id: $('Formatar Entrada').first().json.chat_id,\n  },\n}];"
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e05",
+      "name": "Formatar Mensagem (Fallback)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Você é o assistente de um chatbot de clima no Telegram. Reescreva a mensagem abaixo de forma natural, curta e amigável, em português do Brasil. Mantenha exatamente o nome da cidade e o valor da temperatura em °C, e mantenha o emoji 🌤️ no início.\nResponda SOMENTE com um JSON válido, sem markdown, no formato: {\"message\":\"<mensagem reescrita>\",\"ok\":true}\n\nMensagem original: {{ $json.message }}",
+        "hasOutputParser": false
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e06",
+      "name": "Gemini - Melhorar Mensagem",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1120,
+        180
+      ],
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e07",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Usa a resposta do Gemini se ela for um JSON valido {message, ok:true};\n// caso contrario (Gemini desativado, sem credencial ou com erro), usa o fallback.\nconst fallback = $('Formatar Mensagem (Fallback)').first().json;\nconst raw = $input.first().json.text;\n\nlet message = fallback.message;\nlet fonte = 'fallback';\n\nif (typeof raw === 'string' && raw.trim()) {\n  try {\n    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());\n    if (parsed && parsed.ok === true && typeof parsed.message === 'string' && parsed.message.trim()) {\n      message = parsed.message.trim();\n      fonte = 'gemini';\n    }\n  } catch (e) {\n    // resposta invalida do Gemini -> mantem o fallback\n  }\n}\n\nreturn [{ json: { ok: true, message, fonte, chat_id: fallback.chat_id } }];"
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e08",
+      "name": "Mensagem Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Formatar Entrada').first().json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e09",
+      "name": "Enviar Temperatura",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1620,
+        180
+      ],
+      "webhookId": "d4e5f6a7-1b2c-4d3e-9f80-a1b2c3d4e5f6"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Formatar Entrada').first().json.chat_id }}",
+        "text": "❌ Cidade não encontrada. Use o formato Cidade,UF,BR (ex.: São Paulo,SP,BR).",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e10",
+      "name": "Enviar Erro",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        900,
+        560
+      ],
+      "webhookId": "e5f6a7b8-2c3d-4e4f-8a91-b2c3d4e5f6a7"
+    },
+    {
+      "parameters": {
+        "content": "## Gemini (opcional)\nOs nós **Gemini - Melhorar Mensagem** e **Google Gemini Chat Model** vêm **desativados**.\nPara usar: ative os dois, selecione a credencial *Google Gemini(PaLM) Api* no Chat Model e salve.\nSe o Gemini falhar ou estiver desativado, o nó **Mensagem Final** usa a mensagem do **Formatar Mensagem (Fallback)**.",
+        "height": 220,
+        "width": 420,
+        "color": 5
+      },
+      "id": "6f1d2b4a-1c3e-4a5b-9d8e-0a1b2c3d4e11",
+      "name": "Nota Gemini",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        -100
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Formatar Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Entrada": {
+      "main": [
+        [
+          {
+            "node": "OpenWeather - Clima Atual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenWeather - Clima Atual": {
+      "main": [
+        [
+          {
+            "node": "Resposta Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta Válida?": {
+      "main": [
+        [
+          {
+            "node": "Formatar Mensagem (Fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Mensagem (Fallback)": {
+      "main": [
+        [
+          {
+            "node": "Gemini - Melhorar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gemini - Melhorar Mensagem",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Melhorar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Mensagem Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem Final": {
+      "main": [
+        [
+          {
+            "node": "Enviar Temperatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {},
+  "tags": []
+}
